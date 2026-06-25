@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<meta charset="UTF-8">
+  <title>Machine Resolutions</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    .strikethrough {
+      text-decoration: line-through;
+    }
+
+    .highlight {
+      background-color: yellow;
+    }
+
+    .footer-text {
+      margin-top: 20px;
+      font-size: 12px;
+      color: #555;
+      text-align: center;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      box-sizing: border-box;
+      padding: 24px 0;
+      font-family: 'Garamond', serif;
+      font-size: 1.5rem;
+      background-color: #fff;
+      color: #000;
+    }
+
+    .line {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 80%;
+      margin: 10px 0;
+    }
+
+    .line p {
+      cursor: pointer;
+    }
+
+    .pending {
+      color: #999;
+      font-style: italic;
+    }
+
+    .errored {
+      color: #b00;
+      font-style: italic;
+    }
+
+    /* Key/model setup panel */
+    .setup {
+      width: 80%;
+      max-width: 640px;
+      text-align: center;
+    }
+
+    .setup input {
+      font-size: 1rem;
+      padding: 6px 8px;
+      margin: 6px 0;
+      width: 100%;
+      box-sizing: border-box;
+      font-family: monospace;
+    }
+
+    .setup button {
+      font-size: 1rem;
+      padding: 6px 16px;
+      margin-top: 8px;
+      cursor: pointer;
+    }
+
+    .setup .field-label {
+      display: block;
+      text-align: left;
+      font-size: 14px;
+      font-weight: bold;
+      margin-top: 14px;
+    }
+
+    .setup .field-note {
+      display: block;
+      text-align: left;
+      font-size: 12px;
+      color: #777;
+      margin-top: 2px;
+    }
+
+    .setup .hint {
+      font-size: 13px;
+      color: #555;
+      margin-top: 12px;
+      line-height: 1.5;
+    }
+
+    .setup .hint a {
+      color: inherit;
+    }
+
+    @media (max-width: 600px) {
+      body {
+        font-size: 1rem;
+      }
+
+      .line {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+
+    /* 🌙 Dark Mode Support */
+    @media (prefers-color-scheme: dark) {
+      body {
+        background-color: #1e1e1e;
+        color: #f5f5f5;
+      }
+
+      .highlight {
+        background-color: #ffeb3b;
+        color: #000;
+      }
+
+      .strikethrough {
+        color: #aaa;
+      }
+
+      .footer-text {
+        color: #999;
+      }
+
+      .setup .hint {
+        color: #aaa;
+      }
+
+      .setup .field-note {
+        color: #999;
+      }
+
+      .setup input {
+        background-color: #2a2a2a;
+        color: #f5f5f5;
+        border: 1px solid #888;
+      }
+
+      .setup button {
+        background-color: #333;
+        color: #f5f5f5;
+        border: 1px solid #888;
+      }
+
+      .line {
+        border-bottom: 1px solid #444;
+        padding-bottom: 10px;
+      }
+    }
+  </style>
+</head>
+
+<body id="body">
+    <h1>Machine Resolutions</h1>
+
+    <script>
+        // ============================================================
+        // CONFIG
+        // ============================================================
+        // A free model so the piece runs on a payment-free OpenRouter
+        // account. Swap to a paid model in the setup field for stronger
+        // output — whatever runs is credited in the footer.
+        var DEFAULT_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
+        var ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
+
+        // Shared system prompt: keep output to a single bare resolution.
+        // Deliberately light-touch — this is an art piece, so we don't
+        // scrub the output into submission, we just ask for one line.
+        var SYSTEM = "You write competitive debate resolutions. Output exactly " +
+            "one resolution and nothing else — no preamble, no numbering, no " +
+            "explanation, and no surrounding quotation marks.";
+
+        // The five personalities. The prompts ARE the piece; the plumbing
+        // below is incidental. ① and ② carry few-shot examples in the
+        // author's real house style; ③④⑤ are left un-exampled so the
+        // model speaks more in its own voice. Temperature climbs across
+        // the five — a deliberate gradient of weirdness.
+        var PROMPTS = [
+            {
+                temperature: 0.7,
+                user:
+                    "Write one serious policy resolution suitable for a year-long " +
+                    "competitive debate: a specific action by a government or " +
+                    "institution on a genuine contemporary issue, with strong, " +
+                    "balanced ground on both sides.\n\nExamples of the expected style:\n" +
+                    "- The Brandenburg standard for incitement should be revised.\n" +
+                    "- The United States should significantly increase military spending.\n" +
+                    "- All K-12 teachers should be converted to hourly employees.\n" +
+                    "- The USFG should limit the authority of employers to make employees sign noncompete clauses.\n" +
+                    "- The USFG should increase taxes on highly processed foods.\n\n" +
+                    "Now write one new resolution in this style."
+            },
+            {
+                temperature: 0.7,
+                user:
+                    "Write one serious value resolution in the Lincoln–Douglas style, " +
+                    "pitting two competing principles against each other or asserting " +
+                    "one ought to be prioritized. Keep it philosophical and timeless " +
+                    "rather than tied to current events.\n\nExamples of the expected style:\n" +
+                    "- When in conflict, religious freedom ought to be valued over an employee's right to be free from discrimination.\n" +
+                    "- A quarter academic system is preferable to a semester system.\n" +
+                    "- When in conflict, morality ought to be valued over legality.\n" +
+                    "- Freedom should be valued above security.\n" +
+                    "- Cooperation should be emphasized over competition in game design.\n\n" +
+                    "Now write one new resolution in this style."
+            },
+            {
+                temperature: 1.0,
+                user:
+                    "Write one lighthearted, playful value resolution — the kind used " +
+                    "to warm up a practice round. Genuinely debatable, but about " +
+                    "everyday life, food, pop culture, or low-stakes opinions. Keep " +
+                    "the formal framing for comic contrast."
+            },
+            {
+                temperature: 1.1,
+                user:
+                    "Write one abstract resolution built around a short aphorism or " +
+                    "maxim. It should read as a philosophical proposition open to " +
+                    "interpretation — evocative and slightly ambiguous rather than concrete."
+            },
+            {
+                temperature: 1.2,
+                user:
+                    "Write one off-the-wall, surreal resolution that could only have " +
+                    "come from an AI: unexpected juxtapositions, strange but internally " +
+                    "coherent logic, a premise no human committee would propose. It must " +
+                    "still be grammatically a resolution and, against all odds, actually debatable."
+            }
+        ];
+
+        // ============================================================
+        // SETUP PANEL (bring-your-own-key)
+        // ============================================================
+        function getKey()   { return localStorage.getItem('or_key'); }
+        function getModel() { return localStorage.getItem('or_model') || DEFAULT_MODEL; }
+
+        function showSetup() {
+            var body = document.getElementById('body');
+            var div = document.createElement('div');
+            div.className = 'setup';
+            div.id = 'setup';
+            div.innerHTML =
+                '<p>This piece generates an IPDA strike sheet live, using your own ' +
+                'OpenRouter key. The key is stored only in this browser and is sent ' +
+                'directly to OpenRouter. There is no server in between.</p>' +
+
+                '<label class="field-label" for="keyInput">Your OpenRouter API key</label>' +
+                '<input id="keyInput" type="password" placeholder="sk-or-v1-..." autocomplete="off">' +
+                '<span class="field-note">Pasted from openrouter.ai/keys. Stored only in this browser.</span>' +
+
+                '<label class="field-label" for="modelInput">Model to use</label>' +
+                '<input id="modelInput" type="text" placeholder="model id" value="' + getModel() + '">' +
+                '<span class="field-note">Leave as-is for the free default, or paste another model id (e.g. a paid one) for stronger output.</span>' +
+
+                '<br><button id="goBtn">Generate</button>' +
+                '<p class="hint">No key? Create a free one at ' +
+                '<a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer">openrouter.ai/keys</a>. ' +
+                'You can set a small spending limit (e.g. $1) on the key and delete it afterward. ' +
+                'The default model is free and needs no payment method.</p>';
+            body.appendChild(div);
+
+            document.getElementById('goBtn').onclick = function () {
+                var key = document.getElementById('keyInput').value.trim();
+                var model = document.getElementById('modelInput').value.trim() || DEFAULT_MODEL;
+                if (!key) { return; }
+                localStorage.setItem('or_key', key);
+                localStorage.setItem('or_model', model);
+                div.remove();
+                generate();
+            };
+        }
+
+        // ============================================================
+        // GENERATION
+        // ============================================================
+        // Minimal cleanup: trim, strip a wrapping pair of quotes, keep the
+        // first non-empty line. We intentionally do NOT scrub further — any
+        // residual quirk is part of the piece.
+        function tidy(text) {
+            var line = text.trim().split('\n').find(function (l) { return l.trim() !== ''; }) || text.trim();
+            line = line.trim().replace(/^["“]|["”]$/g, '').trim();
+            return line;
+        }
+
+        async function callOpenRouter(prompt, key, model) {
+            var res = await fetch(ENDPOINT, {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + key,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model: model,
+                    temperature: prompt.temperature,
+                    max_tokens: 80,
+                    messages: [
+                        { role: 'system', content: SYSTEM },
+                        { role: 'user', content: prompt.user }
+                    ]
+                })
+            });
+            if (!res.ok) {
+                throw new Error('HTTP ' + res.status);
+            }
+            var data = await res.json();
+            var content = data && data.choices && data.choices[0] &&
+                          data.choices[0].message && data.choices[0].message.content;
+            if (!content) { throw new Error('empty response'); }
+            return tidy(content);
+        }
+
+        function timestamp() {
+            var d = new Date();
+            var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+            return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+                   ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+        }
+
+        function generate() {
+            var key = getKey();
+            var model = getModel();
+            var body = document.getElementById('body');
+
+            // Render five placeholder lines immediately, so the page never
+            // sits blank during the network wait.
+            var lines = [];
+            for (var i = 0; i < PROMPTS.length; i++) {
+                var div = document.createElement('div');
+                div.className = 'line';
+
+                var p = document.createElement('p');
+                p.id = 'line' + (i + 1);
+                p.className = 'pending';
+                p.textContent = 'generating…';
+                p.onclick = (function (p) {
+                    return function () { strikeThrough(p.id); };
+                })(p);
+
+                div.appendChild(p);
+                body.appendChild(div);
+                lines.push(p);
+            }
+
+            // Fire all five in parallel. allSettled means a single failed /
+            // rate-limited call doesn't take the others down.
+            var calls = PROMPTS.map(function (prompt, idx) {
+                return callOpenRouter(prompt, key, model).then(
+                    function (text) {
+                        lines[idx].textContent = text;
+                        lines[idx].className = '';
+                    },
+                    function (err) {
+                        lines[idx].textContent = '— could not generate (' + err.message + ') —';
+                        lines[idx].className = 'errored';
+                    }
+                );
+            });
+
+            Promise.allSettled(calls).then(function () {
+                // The label: small print, model name + timestamp.
+                var footer = document.createElement('p');
+                footer.className = 'footer-text';
+                footer.textContent = 'Generated by ' + model + ' · ' + timestamp();
+
+                var change = document.createElement('a');
+                change.href = '#';
+                change.textContent = ' · change key / model';
+                change.style.color = 'inherit';
+                change.onclick = function (e) {
+                    e.preventDefault();
+                    localStorage.removeItem('or_key');
+                    location.reload();
+                };
+                footer.appendChild(change);
+
+                document.getElementById('body').appendChild(footer);
+            });
+        }
+
+        // ============================================================
+        // STRIKE-SHEET INTERACTION (carried over from the other pages)
+        // ============================================================
+        function updateHighlight() {
+            var paragraphs = document.querySelectorAll('.line p');
+            var unclicked = Array.from(paragraphs)
+                .filter(function (p) { return !p.classList.contains('strikethrough'); });
+            paragraphs.forEach(function (p) { p.classList.remove('highlight'); });
+            if (unclicked.length === 1) {
+                unclicked[0].classList.add('highlight');
+            }
+        }
+
+        function strikeThrough(id) {
+            var element = document.getElementById(id);
+            element.classList.toggle('strikethrough');
+            updateHighlight();
+        }
+
+        // ============================================================
+        // BOOT: if we already have a key, generate; otherwise ask.
+        // ============================================================
+        if (getKey()) {
+            generate();
+        } else {
+            showSetup();
+        }
+    </script>
+
+</body>
+</html>
