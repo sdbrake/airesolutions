@@ -183,9 +183,10 @@
         // Shared system prompt: keep output to a single bare resolution.
         // Deliberately light-touch — this is an art piece, so we don't
         // scrub the output into submission, we just ask for one line.
-        var SYSTEM = "You write competitive debate resolutions. Output exactly " +
+var SYSTEM = "You write competitive debate resolutions. Output exactly " +
             "one resolution and nothing else — no preamble, no numbering, no " +
-            "explanation, and no surrounding quotation marks.";
+            "explanation, and no surrounding quotation marks. Do not begin with " +
+            "the word \"Resolved\" or any similar label; state the resolution directly.";
 
         // The five personalities. The prompts ARE the piece; the plumbing
         // below is incidental. ① and ② carry few-shot examples in the
